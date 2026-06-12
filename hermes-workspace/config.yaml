@@ -1,0 +1,46 @@
+name: Hermes Workspace
+version: "2.3.0"
+slug: hermes-workspace
+description: >-
+  Native web workspace for Hermes Agent — chat, terminal, memory, skills,
+  MCP catalog, Conductor, Swarm Mode, Kanban, dashboard, and more.
+  Connects to your existing Hermes Agent addon via HTTP API.
+url: https://github.com/outsourc-e/hermes-workspace
+arch:
+  - aarch64
+  - amd64
+init: false
+hassio_api: false
+hassio_role: default
+homeassistant: "2024.1.0"
+host_network: false
+ingress: true
+ingress_port: 3000
+ingress_entry: /
+panel_icon: mdi:robot
+panel_title: Hermes Workspace
+panel_admin: true
+ports:
+  "3000/tcp": null
+ports_description:
+  3000/tcp: Web UI (via Ingress)
+map:
+  - config:rw
+  - share:rw
+  - addons:rw
+options:
+  hermes_agent_url: "http://172.30.32.1:8642"
+  hermes_dashboard_url: "http://172.30.32.1:9119"
+  hermes_api_token: ""
+  hermes_password: ""
+  cookie_secure: true
+  trust_proxy: true
+  log_level: info
+schema:
+  hermes_agent_url: "url"
+  hermes_dashboard_url: "url"
+  hermes_api_token: "password"
+  hermes_password: "password?"
+  cookie_secure: "bool"
+  trust_proxy: "bool"
+  log_level: "list(debug|info|warning|error|critical)"
