@@ -1,6 +1,5 @@
 # HAOS Add-on Dockerfile for Hermes Workspace
-# Builds from source instead of using pre-built upstream image
-# because upstream hasn't published Docker images yet
+# Builds from source because upstream hasn't published Docker images
 
 # ─── build stage ─────────────────────────────────────────────────────────
 FROM node:22-slim AS build
@@ -9,19 +8,15 @@ ARG BUILD_VERSION=2.3.0
 
 RUN corepack enable && apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 # Clone upstream repository at specific version
 RUN git clone --depth 1 --branch v${BUILD_VERSION} https://github.com/outsourc-e/hermes-workspace.git /src
 
 WORKDIR /src
 
-# Install deps (cache-friendly: copy only manifests first)
-COPY --from=build /src/package.json /src/pnpm-lock.yaml* ./
+# Install deps
 RUN pnpm install --frozen-lockfile
 
-# Copy sources and build
-COPY --from=build /src/ .
+# Build
 RUN pnpm build
 
 # ─── runtime stage ────────────────────────────────────────────────────────
