@@ -1,0 +1,7 @@
+# HAOS Add-on build configuration
+# Used by home-assistant/builder in GitHub Actions
+build_from:
+  aarch64: ghcr.io/outsourc-e/hermes-workspace:2.3.0
+  amd64: ghcr.io/outsourc-e/hermes-workspace:2.3.0
+args:
+  APP_VERSION: "2.3.0"
