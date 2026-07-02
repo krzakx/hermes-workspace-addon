@@ -33,7 +33,7 @@ jobs:
       - name: Get current version
         id: current
         run: |
-          VERSION=$(grep 'APP_VERSION:' hermes-workspace/build.yaml | sed 's/.*: *"//' | sed 's/"//')
+          VERSION=$(grep 'BUILD_VERSION=' hermes-workspace/Dockerfile | sed 's/.*=//' | sed 's/ *$//')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Current version: $VERSION"
 
@@ -107,12 +107,8 @@ jobs:
         run: |
           echo "=== DRY RUN — changes that would be made ==="
           echo ""
-          echo "build.yaml:"
-          echo "  build_from:"
-          echo "    aarch64: ghcr.io/outsourc-e/hermes-workspace:${{ inputs.version }}"
-          echo "    amd64: ghcr.io/outsourc-e/hermes-workspace:${{ inputs.version }}"
-          echo "  args:"
-          echo "    APP_VERSION: \"${{ inputs.version }}\""
+          echo "Dockerfile:"
+          echo "  ARG BUILD_VERSION=${{ inputs.version }}"
           echo ""
           echo "config.yaml:"
           echo "  version: \"${{ inputs.version }}\""
@@ -120,16 +116,15 @@ jobs:
           echo "Git tag: v${{ inputs.version }}"
           echo "================================================="
 
-      - name: Update build.yaml
+      - name: Update Dockerfile
         if: inputs.dry_run != true
         run: |
           VERSION="${{ inputs.version }}"
           
-          sed -i "s|ghcr.io/outsourc-e/hermes-workspace:.*|ghcr.io/outsourc-e/hermes-workspace:${VERSION}|g" hermes-workspace/build.yaml
-          sed -i "s|APP_VERSION:.*|APP_VERSION: \"${VERSION}\"|" hermes-workspace/build.yaml
+          sed -i "s|ARG BUILD_VERSION=.*|ARG BUILD_VERSION=${VERSION}|" hermes-workspace/Dockerfile
           
-          echo "Updated build.yaml:"
-          cat hermes-workspace/build.yaml
+          echo "Updated Dockerfile:"
+          cat hermes-workspace/Dockerfile
 
       - name: Update config.yaml
         if: inputs.dry_run != true
@@ -172,7 +167,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add hermes-workspace/build.yaml hermes-workspace/config.yaml hermes-workspace/CHANGELOG.md
+          git add hermes-workspace/Dockerfile hermes-workspace/config.yaml hermes-workspace/CHANGELOG.md
           git commit -m "chore: update upstream to v${VERSION}
           
           Updated from v${{ steps.current.outputs.version }} to v${VERSION}
