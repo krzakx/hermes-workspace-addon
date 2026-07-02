@@ -52,7 +52,7 @@ jobs:
         with:
           args: |
             --repository /github/workspace \
-            --addon hermes-workspace \
+            --addon . \
             --target ghcr.io/krzakx/hermes-workspace-addon \
             --tag ${{ steps.meta.outputs.tag }} \
             --version ${{ steps.meta.outputs.version }} \
