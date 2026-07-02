@@ -13,8 +13,8 @@ RUN git clone --depth 1 --branch v${BUILD_VERSION} https://github.com/outsourc-e
 
 WORKDIR /src
 
-# Install deps (allow scripts to run for native deps)
-RUN pnpm install --no-frozen-lockfile
+# Install deps (skip build scripts to avoid pnpm approval issue)
+RUN pnpm install --ignore-scripts
 
 # Build
 RUN pnpm build
