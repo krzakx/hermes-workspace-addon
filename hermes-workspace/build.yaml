@@ -1,8 +1,8 @@
 # HAOS Add-on build configuration
-# Uses the upstream pre-built Hermes Workspace images
-# These are already multi-arch (linux/amd64, linux/arm64)
+# Uses the upstream pre-built Hermes Workspace images (multi-arch manifests)
+# Upstream publishes: ghcr.io/outsourc-e/hermes-workspace:<version>
 build_from:
-  aarch64: ghcr.io/outsourc-e/hermes-workspace:latest-linux-arm64
-  amd64: ghcr.io/outsourc-e/hermes-workspace:latest-linux-amd64
+  aarch64: ghcr.io/outsourc-e/hermes-workspace:2.3.0
+  amd64: ghcr.io/outsourc-e/hermes-workspace:2.3.0
 args:
   APP_VERSION: "2.3.0"

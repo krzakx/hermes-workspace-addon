@@ -1,0 +1,229 @@
+name: Update Upstream Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Upstream version to use (e.g., 2.3.1, 2.4.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run — only show what would change'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: outsourc-e/hermes-workspace
+  UPSTREAM_IMAGE: ghcr.io/outsourc-e/hermes-workspace
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current version
+        id: current
+        run: |
+          VERSION=$(grep 'APP_VERSION:' hermes-workspace/build.yaml | sed 's/.*: *"//' | sed 's/"//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+
+      - name: Validate upstream version exists
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
+          
+          echo "Checking if $TAG exists in ${{ env.UPSTREAM_REPO }}..."
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/tags/${TAG}")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Release $TAG exists"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          elif [ "$HTTP_CODE" = "404" ]; then
+            # Try without 'v' prefix
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ env.UPSTREAM_REPO }}/releases/tags/${VERSION}")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✓ Release $VERSION exists"
+              echo "exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "✗ Release $TAG or $VERSION not found"
+              echo "exists=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "✗ API error: $HTTP_CODE"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Docker image exists
+        if: steps.validate.outputs.exists == 'true'
+        id: image
+        run: |
+          VERSION="${{ inputs.version }}"
+          IMAGE="${{ env.UPSTREAM_IMAGE }}:${VERSION}"
+          
+          echo "Checking if Docker image $IMAGE exists..."
+          
+          # Get anonymous token for GHCR
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:${{ env.UPSTREAM_REPO }}:pull" | jq -r '.token')
+          
+          # Check manifest
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer *** \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            "https://ghcr.io/v2/${{ env.UPSTREAM_REPO }}/manifests/${VERSION}")
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Docker image $IMAGE exists"
+            echo "image_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "✗ Docker image $IMAGE not found (HTTP $HTTP_CODE)"
+            echo "image_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Abort if validation failed
+        if: steps.validate.outputs.exists != 'true' || steps.image.outputs.image_exists != 'true'
+        run: |
+          echo "::error::Validation failed — upstream release or Docker image not found"
+          exit 1
+
+      - name: Show diff (dry run)
+        if: inputs.dry_run == true
+        run: |
+          echo "=== DRY RUN — changes that would be made ==="
+          echo ""
+          echo "build.yaml:"
+          echo "  build_from:"
+          echo "    aarch64: ghcr.io/outsourc-e/hermes-workspace:${{ inputs.version }}"
+          echo "    amd64: ghcr.io/outsourc-e/hermes-workspace:${{ inputs.version }}"
+          echo "  args:"
+          echo "    APP_VERSION: \"${{ inputs.version }}\""
+          echo ""
+          echo "config.yaml:"
+          echo "  version: \"${{ inputs.version }}\""
+          echo ""
+          echo "Git tag: v${{ inputs.version }}"
+          echo "================================================="
+
+      - name: Update build.yaml
+        if: inputs.dry_run != true
+        run: |
+          VERSION="${{ inputs.version }}"
+          
+          sed -i "s|ghcr.io/outsourc-e/hermes-workspace:.*|ghcr.io/outsourc-e/hermes-workspace:${VERSION}|g" hermes-workspace/build.yaml
+          sed -i "s|APP_VERSION:.*|APP_VERSION: \"${VERSION}\"|" hermes-workspace/build.yaml
+          
+          echo "Updated build.yaml:"
+          cat hermes-workspace/build.yaml
+
+      - name: Update config.yaml
+        if: inputs.dry_run != true
+        run: |
+          VERSION="${{ inputs.version }}"
+          
+          sed -i "s|^version:.*|version: \"${VERSION}\"|" hermes-workspace/config.yaml
+          
+          echo "Updated config.yaml:"
+          cat hermes-workspace/config.yaml
+
+      - name: Update CHANGELOG.md
+        if: inputs.dry_run != true
+        run: |
+          VERSION="${{ inputs.version }}"
+          DATE=$(date +%Y-%m-%d)
+          CURRENT="${{ steps.current.outputs.version }}"
+          
+          # Prepend new entry
+          cat > /tmp/changelog_new.md << EOF
+          # Changelog
+          
+          ## ${VERSION} (${DATE})
+          - Updated upstream Hermes Workspace to v${VERSION}
+          - Previous version: v${CURRENT}
+          
+          EOF
+          
+          # Append old changelog (skip first line)
+          tail -n +2 hermes-workspace/CHANGELOG.md >> /tmp/changelog_new.md
+          mv /tmp/changelog_new.md hermes-workspace/CHANGELOG.md
+          
+          echo "Updated CHANGELOG.md"
+
+      - name: Commit and tag
+        if: inputs.dry_run != true
+        run: |
+          VERSION="${{ inputs.version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add hermes-workspace/build.yaml hermes-workspace/config.yaml hermes-workspace/CHANGELOG.md
+          git commit -m "chore: update upstream to v${VERSION}
+          
+          Updated from v${{ steps.current.outputs.version }} to v${VERSION}
+          Upstream release: https://github.com/${{ env.UPSTREAM_REPO }}/releases/tag/v${VERSION}"
+          
+          git tag "v${VERSION}"
+          git push origin main
+          git push origin "v${VERSION}"
+
+      - name: Close update issues
+        if: inputs.dry_run != true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ inputs.version }}';
+            
+            // Find and close related issues
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-update'
+            });
+            
+            for (const issue of issues.data) {
+              if (issue.title.includes(version)) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ Updated to v${version} — closing this issue.\n\nBuild triggered automatically.`
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed'
+                });
+                console.log('Closed issue #' + issue.number);
+              }
+            }
+
+      - name: Summary
+        if: inputs.dry_run != true
+        run: |
+          echo "## ✅ Update Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous:** v${{ steps.current.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Updated:** v${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** v${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build workflow triggered automatically." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[Check build status](../actions)" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,104 @@
+name: Check Upstream Release
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday at 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  UPSTREAM_REPO: outsourc-e/hermes-workspace
+  UPSTREAM_API: https://api.github.com/repos/outsourc-e/hermes-workspace/releases/latest
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get current version
+        id: current
+        run: |
+          VERSION=$(grep 'APP_VERSION:' hermes-workspace/build.yaml | sed 's/.*: *"//' | sed 's/"//')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current addon version: $VERSION"
+
+      - name: Check latest upstream release
+        id: upstream
+        run: |
+          RESPONSE=$(curl -s -H "Accept: application/vnd.github.v3+json" "${{ env.UPSTREAM_API }}")
+          TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
+          PUBLISHED=$(echo "$RESPONSE" | jq -r '.published_at')
+          BODY=$(echo "$RESPONSE" | jq -r '.body' | head -20)
+          
+          # Strip 'v' prefix for comparison
+          VERSION="${TAG#v}"
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
+          echo "Latest upstream: $TAG ($VERSION)"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          UPSTREAM="${{ steps.upstream.outputs.version }}"
+          
+          if [ "$CURRENT" = "$UPSTREAM" ]; then
+            echo "up_to_date=true" >> $GITHUB_OUTPUT
+            echo "✓ Up to date: $CURRENT"
+          else
+            echo "up_to_date=false" >> $GITHUB_OUTPUT
+            echo "⚠ Update available: $CURRENT → $UPSTREAM"
+          fi
+
+      - name: Create issue if update available
+        if: steps.compare.outputs.up_to_date == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `⬆️ Upstream update available: v${{ steps.upstream.outputs.version }}`;
+            const body = `## Upstream Release Update
+            
+            **Current addon version:** v${{ steps.current.outputs.version }}
+            **Latest upstream:** [${{ steps.upstream.outputs.tag }}](https://github.com/${{ env.UPSTREAM_REPO }}/releases/tag/${{ steps.upstream.outputs.tag }})
+            **Published:** ${{ steps.upstream.outputs.published }}
+            
+            ### To update:
+            1. Go to [Actions → Update Upstream Version](../../actions/workflows/update-version.yml)
+            2. Click "Run workflow"
+            3. Enter version: \`${{ steps.upstream.outputs.version }}\`
+            4. Click "Run workflow"
+            
+            This will update \`build.yaml\` and \`config.yaml\`, create a git tag, and trigger the addon build.
+            
+            ---
+            *This issue was created automatically by the check-upstream workflow.*`;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'upstream-update'
+            });
+            
+            const existingIssue = issues.data.find(i => i.title.includes('${{ steps.upstream.outputs.version }}'));
+            
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['upstream-update']
+              });
+              console.log('Created issue: ' + title);
+            } else {
+              console.log('Issue already exists: ' + existingIssue.number);
+            }
