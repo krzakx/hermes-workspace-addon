@@ -7,28 +7,23 @@ echo "======================================"
 echo "  Hermes Workspace Add-on starting"
 echo "======================================"
 
-# Read addon options (HA injects options as __OPTION_NAME env vars too)
-# But we'll also read from /data/options.json for clarity
+# Read addon options using python3 (jq not available in slim image)
 if [[ -f /data/options.json ]]; then
-    export HERMES_API_URL=$(jq -r '.hermes_agent_url // "http://172.30.32.1:8642"' /data/options.json)
-    export HERMES_DASHBOARD_URL=$(jq -r '.hermes_dashboard_url // "http://172.30.32.1:9119"' /data/options.json)
-    export HERMES_API_TOKEN=$(jq -r '.hermes_api_token // ""' /data/options.json)
-    export HERMES_PASSWORD=$(jq -r '.hermes_password // ""' /data/options.json)
-    export COOKIE_SECURE=$(jq -r '.cookie_secure // true' /data/options.json)
-    export TRUST_PROXY=$(jq -r '.trust_proxy // true' /data/options.json)
+    export HERMES_API_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_agent_url','http://172.30.32.1:8642'))")
+    export HERMES_DASHBOARD_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_dashboard_url','http://172.30.32.1:9119'))")
+    export HERMES_API_TOKEN=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_api_token',''))")
+    export HERMES_PASSWORD=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_password',''))")
+    export COOKIE_SECURE=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('cookie_secure', True)).lower())")
+    export TRUST_PROXY=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('trust_proxy', True)).lower())")
 else
     # Fallback to env vars (set by HA from options)
-    export HERMES_API_URL="${__HERMES_AGENT_URL:-http://172.30.32.1:8642}"
-    export HERMES_DASHBOARD_URL="${__HERMES_DASHBOARD_URL:-http://172.30.32.1:9119}"
-    export HERMES_API_TOKEN="${__HERMES_API_TOKEN:-}"
-    export HERMES_PASSWORD="${__HERMES_PASSWORD:-}"
-    export COOKIE_SECURE="${__COOKIE_SECURE:-true}"
-    export TRUST_PROXY="${__TRUST_PROXY:-true}"
+    export HERMES_API_URL="${HERMES_AGENT_URL:-http://172.30.32.1:8642}"
+    export HERMES_DASHBOARD_URL="${HERMES_DASHBOARD_URL:-http://172.30.32.1:9119}"
+    export HERMES_API_TOKEN="${HERMES_API_TOKEN:-}"
+    export HERMES_PASSWORD="${HERMES_PASSWORD:-}"
+    export COOKIE_SECURE="${COOKIE_SECURE:-true}"
+    export TRUST_PROXY="${TRUST_PROXY:-true}"
 fi
-
-# Convert boolean strings to proper values
-export COOKIE_SECURE=$(echo "${COOKIE_SECURE}" | tr '[:upper:]' '[:lower:]')
-export TRUST_PROXY=$(echo "${TRUST_PROXY}" | tr '[:upper:]' '[:lower:]')
 
 # Workspace directories (persisted in /config which mounts to addon_configs)
 export HERMES_HOME="/config/.hermes"
@@ -47,9 +42,8 @@ echo "Trust Proxy: ${TRUST_PROXY}"
 echo "HERMES_HOME: ${HERMES_HOME}"
 echo "Workspace Dir: ${HERMES_WORKSPACE_DIR}"
 
-# The upstream image has the app at /usr/src/app
-cd /usr/src/app
+# The app is at /app in our build
+cd /app
 
-# Start the Next.js server (standalone output)
-# Uses node directly since it's a standalone build
-exec node server.js
+# Start the Next.js server
+exec node --max-old-space-size=2048 server-entry.js
