@@ -1,7 +1,7 @@
 name: Hermes Workspace
 version: "2.3.0"
 slug: hermes-workspace
-image: ghcr.io/krzakx/hermes-workspace-addon/{arch}
+image: ghcr.io/krzakx/hermes-workspace-addon
 description: >-
   Native web workspace for Hermes Agent — chat, terminal, memory, skills,
   MCP catalog, Conductor, Swarm Mode, Kanban, dashboard, and more.
