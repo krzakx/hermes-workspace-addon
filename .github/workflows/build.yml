@@ -19,6 +19,16 @@ jobs:
   build:
     name: Build & Push Multi-arch
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - amd64
+          - aarch64
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,29 +58,38 @@ jobs:
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION (tag: $TAG)"
+          echo "arch=${{ matrix.arch }}" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION (tag: $TAG) for ${{ matrix.arch }}"
 
       - name: Build and push addon
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: true
           build-args: |
             BUILD_VERSION=${{ steps.meta.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}/${{ matrix.arch }}:${{ steps.meta.outputs.version }}
+            ghcr.io/${{ github.repository }}/${{ matrix.arch }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Create GitHub Release
-        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: Hermes Workspace ${{ steps.meta.outputs.tag }}
+          tag_name: ${{ github.ref_name }}
+          name: Hermes Workspace ${{ github.ref_name }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
