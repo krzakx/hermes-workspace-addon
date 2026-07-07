@@ -7,23 +7,17 @@ echo "  Hermes Workspace Add-on starting"
 echo "======================================"
 
 if [[ -f /data/options.json ]]; then
-    eval "$(python3 << 'PYEOF'
-import json
-d = json.load(open('/data/options.json'))
-print(f'export HERMES_API_URL="{d.get("hermes_agent_url", "http://172.30.32.1:8642")}"')
-print(f'export HERMES_DASHBOARD_URL="{d.get("hermes_dashboard_url", "http://172.30.32.1:9119")}"')
-print(f'export HERMES_API_TOKEN="{d.g...n", "")}"')
-print(f'export HERMES_PASSWORD="{d.g...d", "")}"')
-print(f'export COOKIE_SECURE="{str(d.get("cookie_secure", False)).lower()}"')
-print(f'export TRUST_PROXY="{str(d.get("trust_proxy", False)).lower()}"')
-PYEOF
-)"
+    HERMES_API_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_agent_url','http://172.30.32.1:8642'))")
+    HERMES_DASHBOARD_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_dashboard_url','http://172.30.32.1:9119'))")
+    HERMES_API_TOKEN=*** -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_api_token',''))")
+    HERMES_PASSWORD=*** -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_password',''))")
+    COOKIE_SECURE=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('cookie_secure',False)).lower())")
+    TRUST_PROXY=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('trust_proxy',False)).lower())")
+    export HERMES_API_URL HERMES_DASHBOARD_URL HERMES_API_TOKEN HERMES_PASSWORD COOKIE_SECURE TRUST_PROXY
 else
     export HERMES_API_URL="${HERMES_AGENT_URL:-http://172.30.32.1:8642}"
     export HERMES_DASHBOARD_URL="${HERMES_DASHBOARD_URL:-http://172.30.32.1:9119}"
-    export HERMES_API_TOKEN="${HE..."
-    export HERMES_PASSWORD="${HE..."
-    export COOKIE_SECURE="${COOKIE_SECURE:-false}"
+    export HERMES_API_TOKEN=***    export HERMES_PASSWORD=***    export COOKIE_SECURE="${COOKIE_SECURE:-false}"
     export TRUST_PROXY="${TRUST_PROXY:-false}"
 fi
 
