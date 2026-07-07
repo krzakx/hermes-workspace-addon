@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # HAOS Add-on entrypoint for Hermes Workspace
-# Reads addon options from /data/options.json and starts the Next.js server
+# Starts nginx reverse proxy + Node.js server
 set -e
 
 echo "======================================"
@@ -11,21 +11,20 @@ echo "======================================"
 if [[ -f /data/options.json ]]; then
     export HERMES_API_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_agent_url','http://172.30.32.1:8642'))")
     export HERMES_DASHBOARD_URL=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_dashboard_url','http://172.30.32.1:9119'))")
-    export HERMES_API_TOKEN=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_api_token',''))")
-    export HERMES_PASSWORD=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_password',''))")
-    export COOKIE_SECURE=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('cookie_secure', True)).lower())")
-    export TRUST_PROXY=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('trust_proxy', True)).lower())")
+    export HERMES_API_TOKEN=*** -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_api_token',''))")
+    export HERMES_PASSWORD=*** -c "import json; d=json.load(open('/data/options.json')); print(d.get('hermes_password',''))")
+    export COOKIE_SECURE=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('cookie_secure', False)).lower())")
+    export TRUST_PROXY=$(python3 -c "import json; d=json.load(open('/data/options.json')); print(str(d.get('trust_proxy', False)).lower())")
 else
-    # Fallback to env vars (set by HA from options)
     export HERMES_API_URL="${HERMES_AGENT_URL:-http://172.30.32.1:8642}"
     export HERMES_DASHBOARD_URL="${HERMES_DASHBOARD_URL:-http://172.30.32.1:9119}"
     export HERMES_API_TOKEN="${HERMES_API_TOKEN:-}"
     export HERMES_PASSWORD="${HERMES_PASSWORD:-}"
-    export COOKIE_SECURE="${COOKIE_SECURE:-true}"
-    export TRUST_PROXY="${TRUST_PROXY:-true}"
+    export COOKIE_SECURE="${COOKIE_SECURE:-false}"
+    export TRUST_PROXY="${TRUST_PROXY:-false}"
 fi
 
-# Workspace directories (persisted in /config which mounts to addon_configs)
+# Workspace directories
 export HERMES_HOME="/config/.hermes"
 export HERMES_WORKSPACE_DIR="/workspace"
 export PORT="3000"
@@ -42,7 +41,11 @@ echo "Trust Proxy: ${TRUST_PROXY}"
 echo "HERMES_HOME: ${HERMES_HOME}"
 echo "Workspace Dir: ${HERMES_WORKSPACE_DIR}"
 
-# The app is at /app in our build
+# Start nginx reverse proxy (listens on 8080, proxies to 3000)
+nginx -g 'daemon off;' &
+NGINX_PID=$!
+
+# The app is at /app
 cd /app
 
 # Start the Next.js server

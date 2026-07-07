@@ -16,7 +16,7 @@ hassio_role: default
 homeassistant: "2024.1.0"
 host_network: false
 ingress: true
-ingress_port: 3000
+ingress_port: 8080
 ingress_entry: /
 panel_icon: mdi:robot
 panel_title: Hermes Workspace
