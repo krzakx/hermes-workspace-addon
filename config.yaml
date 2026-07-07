@@ -15,16 +15,14 @@ hassio_api: false
 hassio_role: default
 homeassistant: "2024.1.0"
 host_network: false
-ingress: true
-ingress_port: 8080
-ingress_entry: /
+ingress: false
 panel_icon: mdi:robot
 panel_title: Hermes Workspace
 panel_admin: true
 ports:
-  "8080/tcp": 8080
+  "3000/tcp": 3000
 ports_description:
-  8080/tcp: Web UI (direct access)
+  3000/tcp: Web UI (direct access)
 map:
   - config:rw
   - share:rw
@@ -34,8 +32,8 @@ options:
   hermes_dashboard_url: "http://172.30.32.1:9119"
   hermes_api_token: ""
   hermes_password: ""
-  cookie_secure: true
-  trust_proxy: true
+  cookie_secure: false
+  trust_proxy: false
   log_level: info
 schema:
   hermes_agent_url: "url"
